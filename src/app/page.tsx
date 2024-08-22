@@ -1,16 +1,19 @@
 'use client';
 
 import {
+	Alert,
 	Box,
 	Button,
 	ButtonGroup,
 	Card,
+	Chip,
 	Container,
 	FormControl,
 	InputLabel,
 	MenuItem,
 	Paper,
 	Select,
+	SelectChangeEvent,
 	TextField,
 	Typography,
 } from '@mui/material';
@@ -23,8 +26,19 @@ import dayjs, { Dayjs } from 'dayjs';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { useState } from 'react';
 import Grid2 from '@mui/material/Unstable_Grid2/Grid2';
+import CheckIcon from '@mui/icons-material/Check';
 
 export type intervalType = 'daily' | 'weekly' | 'monthly';
+
+const daysOfWeek = [
+	'Sunday',
+	'Monday',
+	'Tuesday',
+	'Wednesday',
+	'Thursday',
+	'Friday',
+	'Saturday',
+];
 
 export default function Home() {
 	const [interval, setInterval] = useState<intervalType | null>(null);
@@ -33,38 +47,71 @@ export default function Home() {
 	const [query, setQuery] = useState<string>('');
 	const [emailList, setEmailList] = useState<string>('');
 	const [emails, setEmails] = useState<string[]>([]);
-	const [isValid, setIsValid] = useState<boolean>(true);
-	const [range, setRange] = useState<number | null>(null);
+	const [error, setError] = useState<string>('');
+	const [success, setSuccess] = useState<boolean>(false);
 	const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
-	function handleSetInterval(value: intervalType) {
-		setInterval(value);
-		switch (value) {
-			case 'daily':
-				setRange(24);
-				break;
-
-			default:
-				break;
-		}
+	function handleSetInterval(
+		event: SelectChangeEvent<'daily' | 'weekly' | 'monthly' | null>
+	) {
+		setInterval(event.target.value as intervalType);
 	}
-	function handleSetDay(value: number) {
-		setDay(value);
+	function handleSetDay(event: SelectChangeEvent<number | null>) {
+		setDay(+event.target.value!);
 	}
 	function handleSetTime(value: Dayjs | null) {
 		setTime(value);
 	}
-	function handleSetQuery(value: string) {
-		setQuery(value);
+	function handleSetQuery(
+		event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+	) {
+		setQuery(event.target.value);
 	}
-	function handleSetEmailList(value: string) {
-		const inputEmails = value.split(/,*\s+/); // Assuming one email per line
-		const allValid = inputEmails.every((email) =>
-			emailRegex.test(email.trim())
+
+	function handleSetEmailList(
+		event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+	) {
+		setEmailList(event.target.value);
+	}
+	function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+		if (
+			(event.key === 'Enter' || event.key === ',') &&
+			emailList.trim() !== ''
+		) {
+			event.preventDefault();
+			addEmails(emailList);
+		}
+	}
+	function validateEmail(email: string) {
+		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+		return emailRegex.test(email);
+	}
+
+	function handleDelete(emailToDelete: string) {
+		setEmails(emails.filter((email) => email !== emailToDelete));
+	}
+	function addEmails(input: string) {
+		const emailList = input
+			.split(/[\s,;]+/)
+			.map((email) => email.trim())
+			.filter((email) => email !== '');
+
+		const invalidEmails = emailList.filter(
+			(email) => !validateEmail(email)
 		);
-		setEmailList(value);
-		setIsValid(allValid);
-		setEmails(inputEmails);
+		if (invalidEmails.length > 0) {
+			setError(`Invalid email(s): ${invalidEmails.join(', ')}`);
+			return;
+		}
+
+		const newEmails = emailList.filter((email) => !emails.includes(email));
+		if (newEmails.length > 0) {
+			setEmails([...emails, ...newEmails]);
+			setEmailList('');
+			setError('');
+		} else {
+			setError('All entered emails are already added.');
+		}
 	}
 
 	function handleClear() {
@@ -74,20 +121,27 @@ export default function Home() {
 		setQuery('');
 		setEmailList('');
 		setEmails([]);
-		setIsValid(true);
+		setError('');
 	}
 
 	async function handleSend() {
 		const req = { interval, emails, time, query, day };
 
-		await fetch('/api/send', {
+		const response = await fetch('/api/send', {
 			method: 'POST',
 			body: JSON.stringify(req),
 		});
+
+		if (response.status < 300) {
+			setSuccess(true);
+			setTimeout(() => {
+				setSuccess(false);
+			}, 3000);
+		}
 	}
 
 	return (
-		<Box component='main'>
+		<Box component='main' py={4}>
 			<Container>
 				<Paper>
 					<Box p={4}>
@@ -98,7 +152,7 @@ export default function Home() {
 							Configure your email notification settings for
 							relevant business bids.
 						</Typography>
-						<Box p={3}>
+						<Box py={3}>
 							<Grid2 container spacing={2}>
 								<Grid2 xs={3}>
 									<FormControl fullWidth>
@@ -111,12 +165,7 @@ export default function Home() {
 											value={interval}
 											label='Notification Interval'
 											fullWidth
-											onChange={(event) =>
-												handleSetInterval(
-													event.target
-														.value as intervalType
-												)
-											}
+											onChange={handleSetInterval}
 										>
 											<MenuItem value='daily'>
 												Daily
@@ -144,17 +193,13 @@ export default function Home() {
 											value={day}
 											label='Notification Interval'
 											fullWidth
-											onChange={(event) =>
-												handleSetDay(
-													+event.target.value!
-												)
-											}
+											onChange={handleSetDay}
 										>
 											{[
 												...Array(
 													interval === 'weekly'
 														? 7
-														: 28
+														: 31
 												).keys(),
 											].map((value) => (
 												<MenuItem
@@ -166,7 +211,9 @@ export default function Home() {
 															: 1)
 													}
 												>
-													{value + 1}
+													{interval === 'weekly'
+														? daysOfWeek[value]
+														: value + 1}
 												</MenuItem>
 											))}
 										</Select>
@@ -182,9 +229,7 @@ export default function Home() {
 											format='HH:mm'
 											fullWidth
 											value={time}
-											onChange={(newValue) =>
-												handleSetTime(newValue)
-											}
+											onChange={handleSetTime}
 										/>
 									</LocalizationProvider>
 								</Grid2>
@@ -193,30 +238,41 @@ export default function Home() {
 										label='Search Query'
 										value={query}
 										fullWidth
-										onChange={(event) => {
-											handleSetQuery(event.target.value);
-										}}
+										onChange={handleSetQuery}
 									/>
 								</Grid2>
 								<Grid2 xs>
 									<TextField
-										label='Email List'
-										value={emailList}
+										variant='outlined'
+										label='Add Emails'
 										fullWidth
-										multiline
-										rows={2}
-										onChange={(event) => {
-											handleSetEmailList(
-												event.target.value
-											);
-										}}
-										error={!isValid}
+										value={emailList}
+										onChange={handleSetEmailList}
+										onKeyDown={handleKeyDown}
+										error={!!error}
 										helperText={
-											!isValid
-												? 'One or more emails are invalid.'
-												: ''
+											error ||
+											'Separate emails with commas, spaces, or semicolons'
 										}
 									/>
+									<Box
+										sx={{
+											display: 'flex',
+											flexWrap: 'wrap',
+											gap: 1,
+											marginTop: 2,
+										}}
+									>
+										{emails.map((email, index) => (
+											<Chip
+												key={index}
+												label={email}
+												onDelete={() =>
+													handleDelete(email)
+												}
+											/>
+										))}
+									</Box>
 								</Grid2>
 							</Grid2>
 						</Box>
@@ -227,13 +283,27 @@ export default function Home() {
 							<Button color='error' onClick={handleClear}>
 								Clear
 							</Button>
-							<Button variant='contained' onClick={handleSend}>
+							<Button
+								variant='contained'
+								onClick={handleSend}
+								disabled={emails.length === 0}
+							>
 								Create
 							</Button>
 						</ButtonGroup>
 					</Box>
 				</Paper>
 			</Container>
+			{success && (
+				<Alert
+					sx={{ marginTop: '25px' }}
+					icon={<CheckIcon fontSize='inherit' />}
+					severity='success'
+				>
+					Here is a gentle confirmation that your action was
+					successful.
+				</Alert>
+			)}
 		</Box>
 	);
 }

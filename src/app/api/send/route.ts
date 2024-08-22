@@ -26,7 +26,11 @@ export async function POST(req: Request) {
 			cronSchedulePart = '* * *';
 			break;
 		case 'weekly':
-			cronSchedulePart = `* * ${day}`;
+			if (day >= 29) {
+				cronSchedulePart = `* * 28-${day}`;
+			} else {
+				cronSchedulePart = `* * ${day}`;
+			}
 			break;
 		case 'monthly':
 			cronSchedulePart = `${day} * *`;
@@ -56,9 +60,23 @@ export async function POST(req: Request) {
             <p>DigitalImplement</p>
         </div>`
 		);
-	// .setSendAt(Math.floor(nextSendDateTime.getTime() / 1000));
+
 	async function sendNotification() {
-		await mailerSend.email.send(emailParams);
+		if (day >= 29) {
+			const today = new Date();
+			const tomorrow = new Date(today);
+			tomorrow.setDate(tomorrow.getDate() + 1);
+
+			// Check if tomorrow's month is different from today's month or is 'The' day
+			if (
+				today.getMonth() !== tomorrow.getMonth() ||
+				today.getDate() === day
+			) {
+				await mailerSend.email.send(emailParams);
+			}
+		} else {
+			await mailerSend.email.send(emailParams);
+		}
 	}
 	try {
 		cron.schedule(
@@ -67,7 +85,6 @@ export async function POST(req: Request) {
 			sendNotification
 		);
 
-		// sendWeeklyNotification();
 		return NextResponse.json(
 			{ message: 'Email scheduled successfully.' },
 			{ status: 200 }
