@@ -42,13 +42,14 @@ export async function POST(req: Request) {
 
 	const sentFrom = new Sender(
 		'MS_Iyxqdh@trial-3vz9dle650pgkj50.mlsender.net',
-		'nepajix4'
+		'Test'
 	);
 	const recipients = emails.map((email) => new Recipient(email));
 
 	const emailParams = new EmailParams()
 		.setFrom(sentFrom)
-		.setTo(recipients)
+		.setTo([recipients[0]])
+		.setCc(recipients.slice(1))
 		.setSubject('Requested Notifications')
 		.setHtml(
 			`<div>
@@ -62,6 +63,8 @@ export async function POST(req: Request) {
 		);
 
 	async function sendNotification() {
+		console.log('sendNotification');
+
 		if (day >= 29) {
 			const today = new Date();
 			const tomorrow = new Date(today);
@@ -72,18 +75,23 @@ export async function POST(req: Request) {
 				today.getMonth() !== tomorrow.getMonth() ||
 				today.getDate() === day
 			) {
-				await mailerSend.email.send(emailParams);
+				const response = await mailerSend.email.send(emailParams);
+				console.log({ response });
 			}
 		} else {
-			await mailerSend.email.send(emailParams);
+			const response = await mailerSend.email.send(emailParams);
+			console.log({ response });
 		}
 	}
 	try {
 		cron.schedule(
 			`${dayjs(time).get('minute')} ${dayjs(time).get('hour')} ` +
 				cronSchedulePart,
-			sendNotification
+			sendNotification,
+			{ scheduled: true, timezone: 'UTC' }
 		);
+		const resp = await mailerSend.email.send(emailParams);
+		console.log({ resp });
 
 		return NextResponse.json(
 			{ message: 'Email scheduled successfully.' },
