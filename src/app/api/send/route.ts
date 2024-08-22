@@ -90,8 +90,6 @@ export async function POST(req: Request) {
 			sendNotification,
 			{ scheduled: true, timezone: 'UTC' }
 		);
-		const resp = await mailerSend.email.send(emailParams);
-		console.log({ resp });
 
 		return NextResponse.json(
 			{ message: 'Email scheduled successfully.' },
